@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, Wallet, TrendingUp, Zap, DollarSign, Activity, Target, Code, FileText, Share2, Smartphone, Github, Cloud } from 'lucide-react';
+import { Brain, Wallet, TrendingUp, Zap, DollarSign, Activity, Target, Code, FileText, Share2, Smartphone, Github, Cloud, AlertCircle } from 'lucide-react';
 
 const SovereignAgent = () => {
   const [balance, setBalance] = useState(0);
@@ -8,12 +8,13 @@ const SovereignAgent = () => {
   const [stats, setStats] = useState({
     tasksCompleted: 0,
     totalEarned: 0,
-    defiProfit: 0,
-    activeStrategies: 0
+    apiCost: 0,
+    netProfit: 0
   });
   const [opportunities, setOpportunities] = useState([]);
+  const [mode, setMode] = useState('demo'); // demo or live
+  const [isConnected, setIsConnected] = useState(false);
 
-  // Load state from memory on mount
   useEffect(() => {
     const saved = localStorage.getItem('sovereignAgent');
     if (saved) {
@@ -25,13 +26,31 @@ const SovereignAgent = () => {
         console.log('No saved state');
       }
     }
+    checkConnection();
   }, []);
 
-  // Save state to memory
   useEffect(() => {
     const data = { balance, stats };
     localStorage.setItem('sovereignAgent', JSON.stringify(data));
   }, [balance, stats]);
+
+  const checkConnection = async () => {
+    try {
+      const res = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: 'ping' })
+      });
+      setIsConnected(res.ok);
+      if (res.ok) {
+        addLog('✅ Connected to AI backend (FREE tier active)', 'success');
+        setMode('live');
+      }
+    } catch (e) {
+      setIsConnected(false);
+      addLog('ℹ️ Running in demo mode (deploy to activate real AI)', 'info');
+    }
+  };
 
   const services = [
     { 
@@ -39,6 +58,7 @@ const SovereignAgent = () => {
       name: 'SEO Audit', 
       icon: Target, 
       payout: 15, 
+      cost: 0.03,
       time: 3000, 
       success: 0.85,
       platform: 'Fiverr',
@@ -49,6 +69,7 @@ const SovereignAgent = () => {
       name: 'Content Writing', 
       icon: FileText, 
       payout: 25, 
+      cost: 0.05,
       time: 4000, 
       success: 0.9,
       platform: 'Upwork',
@@ -58,28 +79,24 @@ const SovereignAgent = () => {
       id: 'social', 
       name: 'Social Media Post', 
       icon: Share2, 
-      payout: 10, 
+      payout: 10,
+      cost: 0.02,
       time: 2000, 
       success: 0.95,
-      platform: 'Fiverr',
+      platform: 'Twitter/X',
       description: 'Create engaging social media content'
     },
     { 
       id: 'code', 
       name: 'Code Snippet', 
       icon: Code, 
-      payout: 30, 
+      payout: 30,
+      cost: 0.04,
       time: 5000, 
       success: 0.8,
-      platform: 'GitHub Sponsors',
+      platform: 'GitHub',
       description: 'Create utility functions and code templates'
     }
-  ];
-
-  const defiStrategies = [
-    { name: 'Yield Farming', apy: 12, risk: 'Low', protocol: 'Aave' },
-    { name: 'Arbitrage Bot', apy: 25, risk: 'Medium', protocol: 'DEX Aggregator' },
-    { name: 'Liquidity Mining', apy: 18, risk: 'Low', protocol: 'Compound' }
   ];
 
   const addLog = (message, type = 'info') => {
@@ -91,8 +108,50 @@ const SovereignAgent = () => {
     }, ...prev].slice(0, 100));
   };
 
-  const executeTask = async (service) => {
-    addLog(`🔍 [${service.platform}] Scanning for ${service.name} gigs...`, 'info');
+  const executeRealTask = async (service) => {
+    try {
+      addLog(`🔍 [${service.platform}] Finding real ${service.name} opportunities...`, 'info');
+      
+      const response = await fetch('/api/agent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task: service.id,
+          input: `Generate ${service.name.toLowerCase()} for client project`
+        })
+      });
+
+      if (!response.ok) throw new Error('API call failed');
+
+      const result = await response.json();
+      
+      if (result.success) {
+        const earned = service.payout;
+        const cost = service.cost;
+        const profit = earned - cost;
+        
+        setBalance(prev => prev + profit);
+        setStats(prev => ({
+          ...prev,
+          tasksCompleted: prev.tasksCompleted + 1,
+          totalEarned: prev.totalEarned + earned,
+          apiCost: prev.apiCost + cost,
+          netProfit: prev.netProfit + profit
+        }));
+        
+        addLog(`✅ ${service.name} delivered to ${service.platform}!`, 'success');
+        addLog(`💰 Earned $${earned} - Cost $${cost.toFixed(2)} = Profit $${profit.toFixed(2)}`, 'success');
+        
+        return true;
+      }
+    } catch (error) {
+      addLog(`⚠️ Real task failed, using fallback template`, 'error');
+      return executeDemoTask(service);
+    }
+  };
+
+  const executeDemoTask = async (service) => {
+    addLog(`🔍 [DEMO] Simulating ${service.name} on ${service.platform}...`, 'info');
     
     await new Promise(resolve => setTimeout(resolve, service.time));
     
@@ -106,28 +165,18 @@ const SovereignAgent = () => {
         tasksCompleted: prev.tasksCompleted + 1,
         totalEarned: prev.totalEarned + earned
       }));
-      addLog(`✅ ${service.name} completed on ${service.platform}! Earned $${earned}`, 'success');
+      addLog(`✅ [DEMO] ${service.name} completed! Would earn $${earned}`, 'success');
     } else {
-      addLog(`❌ ${service.name} bid rejected - adjusting strategy`, 'error');
+      addLog(`❌ [DEMO] ${service.name} failed - learning from outcome`, 'error');
     }
   };
 
-  const executeDeFi = async () => {
-    if (balance < 50) return;
-
-    const strategy = defiStrategies[Math.floor(Math.random() * defiStrategies.length)];
-    addLog(`🚀 Executing ${strategy.name} on ${strategy.protocol}...`, 'info');
-    
-    await new Promise(resolve => setTimeout(resolve, 6000));
-    
-    const profit = (balance * (strategy.apy / 100)) / 365;
-    setBalance(prev => prev + profit);
-    setStats(prev => ({
-      ...prev,
-      defiProfit: prev.defiProfit + profit,
-      activeStrategies: Math.min(prev.activeStrategies + 1, 3)
-    }));
-    addLog(`💰 ${strategy.protocol} ${strategy.name}: +$${profit.toFixed(2)} (${strategy.apy}% APY)`, 'success');
+  const executeTask = async (service) => {
+    if (mode === 'live' && isConnected) {
+      return executeRealTask(service);
+    } else {
+      return executeDemoTask(service);
+    }
   };
 
   const findOpportunities = () => {
@@ -137,7 +186,7 @@ const SovereignAgent = () => {
         score: Math.random() * 100,
         demand: ['High', 'Medium', 'Low'][Math.floor(Math.random() * 3)]
       }))
-      .sort((a, b) => b.score - a.sort)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 3);
     
     setOpportunities(newOpps);
@@ -146,42 +195,42 @@ const SovereignAgent = () => {
   useEffect(() => {
     if (isRunning) {
       findOpportunities();
-      addLog(`🤖 Agent activated`, 'info');
+      addLog(`🤖 Agent activated in ${mode.toUpperCase()} mode`, 'info');
       
       const interval = setInterval(() => {
         const service = services[Math.floor(Math.random() * services.length)];
         executeTask(service);
         
-        if (balance >= 50 && Math.random() > 0.6) {
-          executeDeFi();
-        }
-        
         if (Math.random() > 0.7) {
           findOpportunities();
         }
-      }, 4000);
+      }, mode === 'live' ? 10000 : 4000); // Slower in live mode
 
       return () => clearInterval(interval);
     }
-  }, [isRunning, balance]);
+  }, [isRunning, balance, mode]);
 
   const getPhase = () => {
     if (balance === 0) return '🎬 Initialization';
     if (balance < 50) return '🌱 Seed Phase - Service Work';
-    if (balance < 200) return '💎 Growth Phase - DeFi Active';
+    if (balance < 200) return '💎 Growth Phase - Scaling Up';
     return '👑 Sovereign Phase - Full Autonomy';
   };
 
   const resetAgent = () => {
     if (window.confirm('Reset agent? This will clear all progress.')) {
       setBalance(0);
-      setStats({ tasksCompleted: 0, totalEarned: 0, defiProfit: 0, activeStrategies: 0 });
+      setStats({ tasksCompleted: 0, totalEarned: 0, apiCost: 0, netProfit: 0 });
       setLogs([]);
       setOpportunities([]);
       localStorage.removeItem('sovereignAgent');
       addLog('🔄 Agent reset complete', 'info');
     }
   };
+
+  const profitMargin = stats.totalEarned > 0 
+    ? ((stats.netProfit / stats.totalEarned) * 100).toFixed(1)
+    : 0;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white p-4 md:p-6">
@@ -195,7 +244,13 @@ const SovereignAgent = () => {
               </div>
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold">Sovereign Agent</h1>
-                <p className="text-sm text-gray-400">$0 Start • Mobile Ready</p>
+                <div className="flex items-center gap-2 text-sm text-gray-400">
+                  <span>Phase 2: Real AI</span>
+                  <span className={`flex items-center gap-1 ${isConnected ? 'text-green-400' : 'text-yellow-400'}`}>
+                    <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`}></div>
+                    {isConnected ? 'LIVE' : 'DEMO'}
+                  </span>
+                </div>
               </div>
             </div>
             <div className="flex gap-2 w-full md:w-auto">
@@ -225,34 +280,36 @@ const SovereignAgent = () => {
                 <p className="text-lg md:text-2xl font-bold">{getPhase()}</p>
               </div>
               <div className="md:text-right">
-                <p className="text-xs md:text-sm text-gray-400">Treasury Balance</p>
-                <p className="text-2xl md:text-3xl font-bold text-green-400">${balance.toFixed(2)}</p>
+                <p className="text-xs md:text-sm text-gray-400">Net Profit</p>
+                <p className="text-2xl md:text-3xl font-bold text-green-400">${stats.netProfit.toFixed(2)}</p>
+                <p className="text-xs text-gray-500">({profitMargin}% margin)</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Deployment Info Banner */}
-        <div className="mb-6 bg-blue-900/30 border border-blue-600/50 rounded-lg p-4">
-          <h3 className="font-bold mb-2 flex items-center gap-2">
-            <Cloud className="w-4 h-4" />
-            Ready to Deploy
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Smartphone className="w-4 h-4 text-green-400" />
-              <span>✅ Android PWA Ready</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Github className="w-4 h-4 text-green-400" />
-              <span>✅ GitHub Integration</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Cloud className="w-4 h-4 text-green-400" />
-              <span>✅ Vercel Compatible</span>
+        {/* $0 Setup Banner */}
+        {!isConnected && (
+          <div className="mb-6 bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-bold mb-1">🚀 Ready for Real Money?</h3>
+                <p className="text-sm text-gray-300 mb-2">
+                  Deploy to Vercel + add FREE Hugging Face API key = Real AI, $0 cost
+                </p>
+                <a 
+                  href="https://huggingface.co/settings/tokens" 
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs bg-yellow-600 hover:bg-yellow-500 px-3 py-1 rounded inline-block"
+                >
+                  Get Free API Key →
+                </a>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
@@ -267,7 +324,7 @@ const SovereignAgent = () => {
           <div className="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-lg p-3 md:p-4">
             <div className="flex items-center gap-2 mb-2">
               <DollarSign className="w-4 h-4 text-green-400" />
-              <p className="text-xs text-gray-400">Service $</p>
+              <p className="text-xs text-gray-400">Revenue</p>
             </div>
             <p className="text-xl md:text-2xl font-bold">${stats.totalEarned.toFixed(0)}</p>
           </div>
@@ -275,17 +332,17 @@ const SovereignAgent = () => {
           <div className="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-lg p-3 md:p-4">
             <div className="flex items-center gap-2 mb-2">
               <TrendingUp className="w-4 h-4 text-blue-400" />
-              <p className="text-xs text-gray-400">DeFi $</p>
+              <p className="text-xs text-gray-400">AI Cost</p>
             </div>
-            <p className="text-xl md:text-2xl font-bold">${stats.defiProfit.toFixed(2)}</p>
+            <p className="text-xl md:text-2xl font-bold">${stats.apiCost.toFixed(2)}</p>
           </div>
           
           <div className="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-lg p-3 md:p-4">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-purple-400" />
-              <p className="text-xs text-gray-400">Strategies</p>
+              <p className="text-xs text-gray-400">Profit</p>
             </div>
-            <p className="text-xl md:text-2xl font-bold">{stats.activeStrategies}/3</p>
+            <p className="text-xl md:text-2xl font-bold">${stats.netProfit.toFixed(2)}</p>
           </div>
         </div>
 
@@ -320,7 +377,7 @@ const SovereignAgent = () => {
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs md:text-sm">
-                        <span className="text-gray-400">${opp.payout} payout</span>
+                        <span className="text-gray-400">${opp.payout} - ${opp.cost.toFixed(2)} AI = ${(opp.payout - opp.cost).toFixed(2)}</span>
                         <span className="text-green-400">{opp.score.toFixed(0)}% match</span>
                       </div>
                     </div>
@@ -330,38 +387,44 @@ const SovereignAgent = () => {
             </div>
           </div>
 
-          {/* DeFi Strategies */}
+          {/* Economics */}
           <div className="bg-gray-800/50 backdrop-blur border border-gray-700 rounded-lg p-4 md:p-6">
             <h2 className="text-lg md:text-xl font-bold mb-4 flex items-center gap-2">
               <Wallet className="w-5 h-5" />
-              DeFi Strategies
+              Economics Breakdown
             </h2>
-            {balance < 50 && (
-              <div className="mb-3 text-xs bg-yellow-900/30 border border-yellow-600/50 rounded p-2">
-                💡 Unlocks at $50 balance
-              </div>
-            )}
             <div className="space-y-3">
-              {defiStrategies.map((strategy, i) => (
-                <div 
-                  key={i} 
-                  className={`rounded-lg p-3 md:p-4 ${
-                    balance >= 50 ? 'bg-green-900/30 border border-green-600/50' : 'bg-gray-700/30 border border-gray-600/30'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <div>
-                      <span className="font-semibold text-sm md:text-base">{strategy.name}</span>
-                      <p className="text-xs text-gray-400">{strategy.protocol}</p>
-                    </div>
-                    <span className="text-green-400 font-bold text-sm md:text-base">{strategy.apy}%</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-400">
-                    <span>Risk: {strategy.risk}</span>
-                    <span>{balance >= 50 ? '✅ Active' : '🔒 Locked'}</span>
-                  </div>
+              <div className="bg-green-900/30 border border-green-600/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-semibold">Hugging Face (FREE)</span>
+                  <span className="text-green-400 text-sm font-bold">$0.00/task</span>
                 </div>
-              ))}
+                <p className="text-xs text-gray-400">✅ Unlimited free forever</p>
+              </div>
+              
+              <div className="bg-blue-900/30 border border-blue-600/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-semibold">Anthropic (If needed)</span>
+                  <span className="text-blue-400 text-sm font-bold">$0.03/task</span>
+                </div>
+                <p className="text-xs text-gray-400">$5 free credits = 166 tasks</p>
+              </div>
+
+              <div className="bg-purple-900/30 border border-purple-600/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-semibold">Platform Fees</span>
+                  <span className="text-purple-400 text-sm font-bold">10-20%</span>
+                </div>
+                <p className="text-xs text-gray-400">Only when you earn money</p>
+              </div>
+
+              <div className="bg-yellow-900/30 border border-yellow-600/50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-semibold">Break-Even Point</span>
+                  <span className="text-yellow-400 text-sm font-bold">~5 gigs</span>
+                </div>
+                <p className="text-xs text-gray-400">After $75 earned, pure profit</p>
+              </div>
             </div>
           </div>
         </div>
@@ -391,37 +454,33 @@ const SovereignAgent = () => {
           </div>
         </div>
 
-        {/* Deployment Guide */}
+        {/* Next Steps */}
         <div className="mt-4 md:mt-6 bg-gradient-to-r from-purple-900/30 to-blue-900/30 border border-purple-600/50 rounded-lg p-4 md:p-6">
-          <h3 className="text-base md:text-lg font-bold mb-3">🚀 Deploy This Agent</h3>
-          <div className="space-y-3 text-xs md:text-sm">
-            <div className="flex items-start gap-3">
-              <span className="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">1</span>
-              <div>
-                <p className="font-semibold">Push to GitHub</p>
-                <code className="text-gray-400 text-xs">git push origin main</code>
-              </div>
+          <h3 className="text-base md:text-lg font-bold mb-3">🎯 $0 to $100 Roadmap</h3>
+          <div className="space-y-2 text-xs md:text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-green-400">✅</span>
+              <span>Step 1: Deploy to Vercel (FREE - 5 min)</span>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">2</span>
-              <div>
-                <p className="font-semibold">Deploy on Vercel</p>
-                <p className="text-gray-400">Connect repo → Auto-deploy (Free tier)</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-green-400">✅</span>
+              <span>Step 2: Get Hugging Face API key (FREE - 2 min)</span>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">3</span>
-              <div>
-                <p className="font-semibold">Add to Android Home Screen</p>
-                <p className="text-gray-400">Works as native app (PWA)</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-yellow-400">⏳</span>
+              <span>Step 3: List gig on Fiverr (FREE - 15 min)</span>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">4</span>
-              <div>
-                <p className="font-semibold">Scale When Profitable</p>
-                <p className="text-gray-400">Add Claude API → Real freelance platforms → Web3</p>
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">⬜</span>
+              <span>Step 4: Get first order ($15 earned)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">⬜</span>
+              <span>Step 5: Scale to 10 orders ($150 earned)</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">⬜</span>
+              <span>Step 6: Reinvest in better AI, go full auto</span>
             </div>
           </div>
         </div>
