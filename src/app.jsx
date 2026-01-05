@@ -12,7 +12,7 @@ const SovereignAgent = () => {
     netProfit: 0
   });
   const [opportunities, setOpportunities] = useState([]);
-  const [mode, setMode] = useState('demo'); // demo or live
+  const [mode, setMode] = useState('live'); // demo or live
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
